@@ -2,35 +2,103 @@
 # vi: set ft=ruby :
 
 Vagrant.configure("2") do |config|
-    config.vm.provider "virtualbox" do |vbox|
-      vbox.customize ["modifyvm", :id, "--graphicscontroller", "none"]
-      vbox.customize ["modifyvm", :id, "--audio", "none"]
-      vbox.memory = 2048
-      vbox.cpus = 2
-    end
-  
-    ssh_pub_key = ""
-    config.vm.provision "shell" do |shell|
-      shell.inline = <<-SHELL
-        echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
-      SHELL
-    end
-  
-    (1..3).each do |i|
-      config.vm.define "dev-kube00#{i}" do |node|
-        node.vm.synced_folder ".", "/vagrant", disabled: true
-        node.vm.box = "zucchini/base-centos-7"
-        node.vm.hostname = "dev-kube00#{i}"
-        node.vm.network "private_network", ip: "192.168.100.10#{i}", virtualbox__intnet: "kubenetwork"
-        node.vm.provision "shell" do |shell|
-          shell.env = {"VAGRANT_KUBELET_NODE_IP" => "192.168.100.10#{i}"}
-          shell.inline = <<-SHELL
-            echo "$VAGRANT_KUBELET_NODE_IP" > /tmp/vagrant_kubelet_nodeip
-          SHELL
-        end
-        node.vm.provider "virtualbox" do |vbox|
-          vbox.name = "dev-kube00#{i}"
-        end
-      end        
-    end
+  config.vm.provider "virtualbox" do |vbox|
+    vbox.customize ["modifyvm", :id, "--graphicscontroller", "none"]
+    vbox.customize ["modifyvm", :id, "--audio", "none"]
+    vbox.memory = 2048
+    vbox.cpus = 2
   end
+
+  ssh_pub_key = ""
+  config.vm.provision "shell" do |shell|
+    shell.inline = <<-SHELL
+      echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
+    SHELL
+  end
+
+  config.vm.provision "shell" do |bootstrap_packages|
+    bootstrap_packages.name = "Installing Ansible"
+    bootstrap_packages.privileged = true
+    bootstrap_packages.inline = <<-SHELL
+      dnf --assumeyes install ansible
+    SHELL
+  end
+
+  config.vm.provision "file" do |bootstrap_copy_ansible_config|
+    bootstrap_copy_ansible_config.source = "zucchini-configs/ansible"
+    bootstrap_copy_ansible_config.destination = "/tmp/ansible"
+  end
+
+  config.vm.provision "file" do |bootstrap_copy_ansible_playbooks|
+    bootstrap_copy_ansible_playbooks.source = "zucchini-ansible/playbooks"
+    bootstrap_copy_ansible_playbooks.destination = "/tmp/ansible/playbooks"
+  end
+  
+  config.vm.provision "file" do |bootstrap_copy_ansible_roles|
+    bootstrap_copy_ansible_roles.source = "zucchini-ansible/roles"
+    bootstrap_copy_ansible_roles.destination = "/tmp/ansible/roles"
+  end
+
+  config.vm.provision "file" do |bootstrap_copy_ansible_vars|
+    bootstrap_copy_ansible_vars.source = "zucchini-configs/ansible/vars/base_config.yml"
+    bootstrap_copy_ansible_vars.destination = "/tmp/ansible/roles/zucchini-base/vars/main.yml"
+  end
+
+  config.vm.provision "file" do |bootstrap_copy_keys|
+    bootstrap_copy_keys.source = "zucchini-configs/keys"
+    bootstrap_copy_keys.destination = "~/keys"
+  end
+
+  config.vm.provision "shell" do |bootstrap_ssh_keys|
+    bootstrap_ssh_keys.name = "Copying GitHub deploy keys"
+    bootstrap_ssh_keys.privileged = false
+    bootstrap_ssh_keys.inline = <<-SHELL
+      cp -r ${HOME}/keys/github/* ${HOME}/.ssh
+    SHELL
+  end    
+
+  config.vm.provision "shell" do |bootstrap_ansible_setup|
+    bootstrap_ansible_setup.name = "Setting up Ansible config"
+    bootstrap_ansible_setup.privileged = false
+    bootstrap_ansible_setup.inline = <<-SHELL
+      ln -sf /tmp/ansible/config/local.cfg /tmp/ansible/ansible.cfg
+    SHELL
+  end
+
+  config.vm.provision "ansible_local" do |bootstrap_ansible|
+    bootstrap_ansible.install = false
+    bootstrap_ansible.become = true
+    bootstrap_ansible.provisioning_path = "/tmp/ansible"
+    bootstrap_ansible.inventory_path = "/tmp/ansible/inventory/dev"
+    bootstrap_ansible.config_file = "/tmp/ansible/config/local.cfg"
+    bootstrap_ansible.extra_vars = "/tmp/ansible/vars/base_config.yml"
+    bootstrap_ansible.playbook = "/tmp/ansible/playbooks/provisioning/zucchini-ansible.yml"
+  end
+
+  config.vm.provision "shell" do |bootstrap_cleanup|
+    bootstrap_cleanup.name = "Final cleanup and we're done"
+    bootstrap_cleanup.privileged = false        
+    bootstrap_cleanup.inline = <<-SHELL
+      rm -rf /tmp/ansible
+      rm -rf ${HOME}/keys
+    SHELL
+  end
+
+  (1..3).each do |i|
+    config.vm.define "dev-kube00#{i}" do |node|
+      node.vm.synced_folder ".", "/vagrant", disabled: true
+      node.vm.box = "fedora/server-34"
+      node.vm.hostname = "dev-kube00#{i}"
+      node.vm.network "private_network", ip: "192.168.100.10#{i}", virtualbox__intnet: "kubenetwork"
+      node.vm.provision "shell" do |shell|
+        shell.env = {"VAGRANT_KUBELET_NODE_IP" => "192.168.100.10#{i}"}
+        shell.inline = <<-SHELL
+          echo "$VAGRANT_KUBELET_NODE_IP" > /tmp/vagrant_kubelet_nodeip
+        SHELL
+      end
+      node.vm.provider "virtualbox" do |vbox|
+        vbox.name = "dev-kube00#{i}"
+      end
+    end        
+  end
+end

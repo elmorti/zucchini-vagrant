@@ -9,20 +9,22 @@ Vagrant.configure("2") do |config|
     global_vbox.cpus = 6
   end
 
-  ssh_pub_key = ""
+  ssh_pub_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBh93LCERUP0lG79QiC0kuX/047xcweAHUu6LGuoj2DI Samuelito Key v3 - ed25519"
   config.vm.provision "shell" do |shell|
     shell.inline = <<-SHELL
       echo #{ssh_pub_key} >> /home/vagrant/.ssh/authorized_keys
     SHELL
   end
 
-  config.vm.define "dev-node001" do |node|
-    node.vm.synced_folder ".", "/vagrant", disabled: true
-    node.vm.box = "zucchini/base-centos-8"
-    node.vm.hostname = "dev-node001"
-    node.vm.network "private_network", ip: "10.2.2.101", virtualbox__intnet: "zucchini"
-    config.vm.provider "virtualbox" do |node_vbox|
-      node_vbox.name = "dev-node001"
-    end
+  (1..3).each do |i|
+    config.vm.define "dev-node00#{i}" do |node|
+      node.vm.synced_folder ".", "/vagrant", disabled: true
+      node.vm.box = "bento/centos-8"
+      node.vm.hostname = "dev-node00#{i}"
+      node.vm.network "private_network", ip: "192.168.100.10#{i}", virtualbox__intnet: "zucchini_test"
+      node.vm.provider "virtualbox" do |vbox|
+        vbox.name = "dev-node00#{i}"
+      end
+    end        
   end
 end
