@@ -9,19 +9,6 @@ Vagrant.configure("2") do |config|
     global_vbox.cpus = 4
   end
   
-  config.vm.provision "file" do |bootstrap_copy_keys|
-    bootstrap_copy_keys.source = "zucchini-configs/keys"
-    bootstrap_copy_keys.destination = "~/keys"
-  end
-
-  config.vm.provision "shell" do |bootstrap_ssh_keys|
-    bootstrap_ssh_keys.name = "Copying GitHub deploy keys"
-    bootstrap_ssh_keys.privileged = false
-    bootstrap_ssh_keys.inline = <<-SHELL
-      cp -r ${HOME}/keys/github/* ${HOME}/.ssh
-    SHELL
-  end
-
    config.vm.define "zucchinisys" do |node|
     node.vm.synced_folder "..\\..\\..\\..\\dev", "/vagrant", disabled: false
     node.vm.box = "bento/fedora-38"
