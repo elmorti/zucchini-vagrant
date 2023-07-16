@@ -1,16 +1,97 @@
 # -*- mode: ruby -*-
 # vi: set ft=ruby :
 
+# vars
+zucchini_configs_root = "../../zucchini-configs/ansible"
+zucchini_ansible_root = ""
+zucchini_ansible_vars = ""
+zucchini_keys_root = ""
+zucchini_ansible_config = ""
+
 Vagrant.configure("2") do |config|
   config.vm.provider "virtualbox" do |global_vbox|
     global_vbox.customize ["modifyvm", :id, "--graphicscontroller", "none"]
     global_vbox.customize ["modifyvm", :id, "--audio", "none"]
-    global_vbox.memory = 4096
+    global_vbox.memory = 8192
     global_vbox.cpus = 4
   end
+
+  config.vm.provision "shell" do |bootstrap_packages|
+    bootstrap_packages.name = "Installing Ansible"
+    bootstrap_packages.privileged = true
+    bootstrap_packages.inline = <<-SHELL
+      dnf -y install ansible
+    SHELL
+  end
+
+  # Copy ansible config
+  config.vm.provision "file" do |bootstrap_copy_ansible_config|
+    bootstrap_copy_ansible_config.source = zucchini_configs_root
+    bootstrap_copy_ansible_config.destination = "/tmp/ansible"
+  end
+
+  # Copy ansible playbooks
+  config.vm.provision "file" do |bootstrap_copy_ansible_playbooks|
+    bootstrap_copy_ansible_playbooks.source = "../../zucchini-configs/ansible/playbooks"
+    bootstrap_copy_ansible_playbooks.destination = "/tmp/ansible/playbooks"
+  end
+
+  # Copy ansible roles  
+  config.vm.provision "file" do |bootstrap_copy_ansible_roles|
+    bootstrap_copy_ansible_roles.source = "../../zucchini-ansible/roles"
+    bootstrap_copy_ansible_roles.destination = "/tmp/ansible/roles"
+  end
+
+  # Copy ansible vars  
+  config.vm.provision "file" do |bootstrap_copy_ansible_vars|
+    bootstrap_copy_ansible_vars.source = "../../zucchini-configs/ansible/vars/base_config.yml"
+    bootstrap_copy_ansible_vars.destination = "/tmp/ansible/roles/zucchini-base/vars/main.yml"
+  end
+
+  # Copy ssh keys  
+  config.vm.provision "file" do |bootstrap_copy_keys|
+    bootstrap_copy_keys.source = "../../zucchini-configs/keys"
+    bootstrap_copy_keys.destination = "~/keys"
+  end
+
+  config.vm.provision "shell" do |bootstrap_ssh_keys|
+    bootstrap_ssh_keys.name = "Copying GitHub deploy keys"
+    bootstrap_ssh_keys.privileged = false
+    bootstrap_ssh_keys.inline = <<-SHELL
+      cp -r ${HOME}/keys/github/* ${HOME}/.ssh
+    SHELL
+  end    
+
+  config.vm.provision "shell" do |bootstrap_ansible_setup|
+    bootstrap_ansible_setup.name = "Setting up Ansible config"
+    bootstrap_ansible_setup.privileged = false
+    bootstrap_ansible_setup.inline = <<-SHELL
+      ln -sf /tmp/ansible/config/local.cfg /tmp/ansible/ansible.cfg
+    SHELL
+  end
+
+  config.vm.provision "ansible_local" do |bootstrap_ansible|
+    bootstrap_ansible.install = false
+    bootstrap_ansible.become = true
+    bootstrap_ansible.provisioning_path = "/tmp/ansible"
+    bootstrap_ansible.inventory_path = "/tmp/ansible/inventory/dev"
+    bootstrap_ansible.config_file = "/tmp/ansible/config/local.cfg"
+    bootstrap_ansible.extra_vars = "/tmp/ansible/vars/base_config.yml"
+    bootstrap_ansible.playbook = "/tmp/ansible/playbooks/provisioning/zucchini-ansible.yml"
+  end
+
+  config.vm.provision "shell" do |bootstrap_cleanup|
+    bootstrap_cleanup.name = "Final cleanup and we're done"
+    bootstrap_cleanup.privileged = false        
+    bootstrap_cleanup.inline = <<-SHELL
+      rm -rf /tmp/ansible
+      rm -rf ${HOME}/keys
+    SHELL
+  end
+
   
    config.vm.define "zucchinisys" do |node|
-    node.vm.synced_folder "..\\..\\..\\..\\dev", "/vagrant", disabled: false
+    node.vm.synced_folder "..\\..\\..\\..\\dev", "/vagrant", disabled: true
     node.vm.box = "bento/fedora-38"
     node.vm.hostname = "zucchinisys"
     node.vm.network "private_network", ip: "192.168.100.101", virtualbox__intnet: "zucchinisys-net"
