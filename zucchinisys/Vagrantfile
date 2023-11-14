@@ -70,15 +70,14 @@ Vagrant.configure("2") do |config|
     SHELL
   end
 
-  config.vm.provision "ansible_local" do |bootstrap_ansible|
-    bootstrap_ansible.install = false
-    bootstrap_ansible.become = true
-    bootstrap_ansible.provisioning_path = "/tmp/ansible"
-    bootstrap_ansible.inventory_path = "/tmp/ansible/inventory/dev"
-    bootstrap_ansible.config_file = "/tmp/ansible/config/local.cfg"
-    bootstrap_ansible.extra_vars = "/tmp/ansible/vars/base_config.yml"
-    bootstrap_ansible.playbook = "/tmp/ansible/playbooks/provisioning/zucchini-ansible.yml"
-  end
+  # config.vm.provision "ansible_local" do |bootstrap_ansible|
+  #   bootstrap_ansible.install = false
+  #   bootstrap_ansible.become = true
+  #   bootstrap_ansible.provisioning_path = "/tmp/ansible"
+  #   bootstrap_ansible.config_file = "/tmp/ansible/config/vagrant.cfg"
+  #   bootstrap_ansible.extra_vars = "/tmp/ansible/vars/zucchinisys.yml"
+  #   bootstrap_ansible.playbook = "/tmp/ansible/playbooks/provisioning/zucchini-zucchinisys.yml"
+  # end
 
   config.vm.provision "shell" do |bootstrap_cleanup|
     bootstrap_cleanup.name = "Final cleanup and we're done"
